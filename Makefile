@@ -139,6 +139,19 @@ repoversion:
 #   MIRA_GPU=0 make simulator-tacc-gz   (force nogpu)
 GZ_ARGS ?= -v3 -r
 XAUTH := /tmp/.docker.xauth
+#-------------------------------------------------------------------------------
+# Gazebo execution mode: docker or host
+#-------------------------------------------------------------------------------
+GAZEBO_MODE ?= docker
+#-------------------------------------------------------------------------------
+
+ifeq ($(GAZEBO_MODE),docker)
+    GZ_PREREQ := $(XAUTH)
+else ifeq ($(GAZEBO_MODE),host)
+    GZ_PREREQ :=
+else
+    $(error Invalid GAZEBO_MODE '$(GAZEBO_MODE)'. Use docker or host)
+endif
 
 # X11 passthrough: ensure xauth cookie and xhost allowance before any
 # gazebo target. See docker/x11-setup.sh for details - it handles the
@@ -167,20 +180,54 @@ endif
 $(XAUTH): check-x11
 	@true
 
-simulator-gz: $(XAUTH)
-	@echo "🚀 Gazebo service: $(GZ_SERVICE)"
-	docker compose up --no-recreate -d $(GZ_SERVICE)
-	docker compose exec $(GZ_SERVICE) bash -c "source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) bluerov2_heavy_underwater.world"
+# World paths inside Docker
+GZ_WORLD_DOCKER ?= bluerov2_heavy_underwater.world
+TACC_WORLD_DOCKER ?= /workspace/worlds/tacc.world
+SAUVC_WORLD_DOCKER ?= /workspace/sauvc_sim/worlds/sauvc25.world
 
-simulator-tacc-gz: $(XAUTH)
-	@echo "🚀 Gazebo service: $(GZ_SERVICE)"
-	docker compose up --no-recreate -d $(GZ_SERVICE)
-	docker compose exec $(GZ_SERVICE) bash -c "source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) /workspace/worlds/tacc.world"
+# World paths on the host
+GZ_WORLD_HOST ?= bluerov2_heavy_underwater.world
+TACC_WORLD_HOST ?= src/worlds/tacc.world
+SAUVC_WORLD_HOST ?= src/sauvc_sim/worlds/sauvc25.world
 
-simulator-sauvc-gz: $(XAUTH)
-	@echo "🚀 Gazebo service: $(GZ_SERVICE)"
+ifeq ($(GAZEBO_MODE),docker)
+
+simulator-gz: $(GZ_PREREQ)
 	docker compose up --no-recreate -d $(GZ_SERVICE)
-	docker compose exec $(GZ_SERVICE) bash -c "source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) /workspace/sauvc_sim/worlds/sauvc25.world"
+	docker compose exec $(GZ_SERVICE) bash -c \
+		"source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) $(GZ_WORLD_DOCKER)"
+
+simulator-tacc-gz: $(GZ_PREREQ)
+	docker compose up --no-recreate -d $(GZ_SERVICE)
+	docker compose exec $(GZ_SERVICE) bash -c \
+		"source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) $(TACC_WORLD_DOCKER)"
+
+simulator-sauvc-gz: $(GZ_PREREQ)
+	docker compose up --no-recreate -d $(GZ_SERVICE)
+	docker compose exec $(GZ_SERVICE) bash -c \
+		"source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) $(SAUVC_WORLD_DOCKER)"
+
+else
+
+simulator-gz:
+	env \
+		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
+		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
+		gz sim $(GZ_ARGS) $(GZ_WORLD_HOST)
+
+simulator-tacc-gz:
+	env \
+		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
+		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
+		gz sim $(GZ_ARGS) $(TACC_WORLD_HOST)
+
+simulator-sauvc-gz:
+	env \
+		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
+		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
+		gz sim $(GZ_ARGS) $(SAUVC_WORLD_HOST)
+
+endif
 
 # Both use `up --no-recreate -d` so the container is persistent:
 # Ctrl-C stops `gz sim` (the exec) without removing the container; the container

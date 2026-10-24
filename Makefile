@@ -190,6 +190,11 @@ GZ_WORLD_HOST ?= bluerov2_heavy_underwater.world
 TACC_WORLD_HOST ?= src/worlds/tacc.world
 SAUVC_WORLD_HOST ?= src/sauvc_sim/worlds/sauvc25.world
 
+#Host machine ros_gazebo brige
+GZ_BRIDGE_HEAVY_ARGS := /front_camera/left/image_raw@sensor_msgs/msg/Image@gz.msgs.Image /front_camera/right/image_raw@sensor_msgs/msg/Image@gz.msgs.Image /sim/front_camera/image@sensor_msgs/msg/Image@gz.msgs.Image /sim/front_camera/depth_image@sensor_msgs/msg/Image@gz.msgs.Image /sim/front_camera/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked /sim/front_camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo /bottom_camera@sensor_msgs/msg/Image@gz.msgs.Image
+GZ_BRIDGE_SAUVC_ARGS := $(GZ_BRIDGE_HEAVY_ARGS)
+GZ_BRIDGE_AUV_ARGS := $(GZ_BRIDGE_HEAVY_ARGS)
+
 ifeq ($(GAZEBO_MODE),docker)
 
 simulator-gz: $(GZ_PREREQ)
@@ -207,25 +212,47 @@ simulator-sauvc-gz: $(GZ_PREREQ)
 	docker compose exec $(GZ_SERVICE) bash -c \
 		"source /tmp/gz-render-env.sh 2>/dev/null; exec gz sim $(GZ_ARGS) $(SAUVC_WORLD_DOCKER)"
 
+
 else
 
+host-gz-plugin:
+	@cmake -S src/ardupilot_gazebo -B src/ardupilot_gazebo/build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+	@cmake --build src/ardupilot_gazebo/build --target ArduPilotPlugin -j$$(nproc)
+
+
 simulator-gz:
-	env \
-		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
-		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
-		gz sim $(GZ_ARGS) $(GZ_WORLD_HOST)
+	@set -e; \
+	source /opt/ros/jazzy/setup.bash; \
+	if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+	export GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}"; \
+	export GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/bluerov2_gz/worlds:$(CURDIR)/worlds:$(CURDIR)/src/common_resources/data/object_files:$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/sauvc_sim/worlds:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$${GZ_SIM_RESOURCE_PATH}"; \
+	ros2 run ros_gz_bridge parameter_bridge $(GZ_BRIDGE_AUV_ARGS) --ros-args -r __ns:=/auv_bridge & \
+	bridge_pid=$$!; \
+	trap 'kill $$bridge_pid 2>/dev/null || true' EXIT INT TERM; \
+	gz sim $(GZ_ARGS) $(GZ_WORLD_HOST)
 
 simulator-tacc-gz:
-	env \
-		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
-		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
-		gz sim $(GZ_ARGS) $(TACC_WORLD_HOST)
+	@set -e; \
+	source /opt/ros/jazzy/setup.bash; \
+	if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+	export GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}"; \
+	export GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/bluerov2_gz/worlds:$(CURDIR)/worlds:$(CURDIR)/src/common_resources/data/object_files:$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/sauvc_sim/worlds:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$${GZ_SIM_RESOURCE_PATH}"; \
+	ros2 run ros_gz_bridge parameter_bridge $(GZ_BRIDGE_AUV_ARGS) --ros-args -r __ns:=/auv_bridge & \
+	bridge_pid=$$!; \
+	trap 'kill $$bridge_pid 2>/dev/null || true' EXIT INT TERM; \
+	gz sim $(GZ_ARGS) $(TACC_WORLD_HOST)
 
 simulator-sauvc-gz:
-	env \
-		GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/common_resources/data/object_files:$${GZ_SIM_RESOURCE_PATH}" \
-		GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}" \
-		gz sim $(GZ_ARGS) $(SAUVC_WORLD_HOST)
+	@set -e; \
+	source /opt/ros/jazzy/setup.bash; \
+	if [ -f install/setup.bash ]; then source install/setup.bash; fi; \
+	export GZ_SIM_SYSTEM_PLUGIN_PATH="$(CURDIR)/src/ardupilot_gazebo/build:$${GZ_SIM_SYSTEM_PLUGIN_PATH}"; \
+	export GZ_SIM_RESOURCE_PATH="$(CURDIR)/src/bluerov2_gz/models:$(CURDIR)/src/bluerov2_gz/worlds:$(CURDIR)/worlds:$(CURDIR)/src/common_resources/data/object_files:$(CURDIR)/src/sauvc_sim/models:$(CURDIR)/src/sauvc_sim/worlds:$(CURDIR)/src/ardupilot_gazebo/models:$(CURDIR)/src/ardupilot_gazebo/worlds:$${GZ_SIM_RESOURCE_PATH}"; \
+	ros2 run ros_gz_bridge parameter_bridge $(GZ_BRIDGE_AUV_ARGS) --ros-args -r __ns:=/auv_bridge & \
+	bridge_pid=$$!; \
+	trap 'kill $$bridge_pid 2>/dev/null || true' EXIT INT TERM; \
+	gz sim $(GZ_ARGS) $(SAUVC_WORLD_HOST)
+
 
 endif
 

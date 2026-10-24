@@ -20,6 +20,11 @@ VENV_EXISTS := $(wildcard .venv)
 ROS_JAZZY_EXISTS := $(wildcard /opt/ros/jazzy)
 MAVPROXY_EXISTS := $(shell command -v mavproxy.py 2>/dev/null)$(shell command -v mavproxy 2>/dev/null)
 
+#-------------------------------------------------------------------------------
+# Gazebo execution mode: docker or host
+#-------------------------------------------------------------------------------
+GAZEBO_MODE ?= host
+#-------------------------------------------------------------------------------
 all: build
 
 # Resolve python paths
@@ -139,11 +144,6 @@ repoversion:
 #   MIRA_GPU=0 make simulator-tacc-gz   (force nogpu)
 GZ_ARGS ?= -v3 -r
 XAUTH := /tmp/.docker.xauth
-#-------------------------------------------------------------------------------
-# Gazebo execution mode: docker or host
-#-------------------------------------------------------------------------------
-GAZEBO_MODE ?= docker
-#-------------------------------------------------------------------------------
 
 ifeq ($(GAZEBO_MODE),docker)
     GZ_PREREQ := $(XAUTH)

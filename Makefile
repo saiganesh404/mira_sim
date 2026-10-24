@@ -23,7 +23,7 @@ MAVPROXY_EXISTS := $(shell command -v mavproxy.py 2>/dev/null)$(shell command -v
 #-------------------------------------------------------------------------------
 # Gazebo execution mode: docker or host
 #-------------------------------------------------------------------------------
-GAZEBO_MODE ?= host
+GAZEBO_MODE ?= docker
 #-------------------------------------------------------------------------------
 all: build
 
